@@ -1,0 +1,119 @@
+#!/bin/bash
+#
+# Подпись артефактов бинарного кэша Tuist: прочитать её для этой машины и проставить
+# на записи кэша, приехавшие откуда-то ещё.
+#
+# Tuist помечает каждый артефакт расширенным атрибутом tuist.cloud.metadata. Значение
+# привязано к машине: чужое отвергается, и артефакт молча не берётся из кэша. При этом
+# значение одно на машину и от артефакта не зависит, поэтому достаточно получить его
+# один раз и проставить на всё скачанное.
+#
+#   tuist-cache-signature read            печатает подпись этой машины
+#   tuist-cache-signature stamp DIR [SIG] проставляет её на все записи кэша в DIR
+#
+# DIR — каталог с записями вида <hash>/, то есть обычно .../tuist/Binaries.
+# Если SIG не передан, берётся результат read.
+
+set -euo pipefail
+
+XATTR_NAME="tuist.cloud.metadata"
+SYSTEM_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/tuist/Binaries"
+
+die() { echo "tuist-cache-signature: $*" >&2; exit 1; }
+
+usage() {
+  cat <<'TXT'
+Подпись артефактов бинарного кэша Tuist.
+
+  tuist-cache-signature read            печатает подпись этой машины
+  tuist-cache-signature stamp DIR [SIG] проставляет её на все записи кэша в DIR
+
+DIR — каталог с записями вида <hash>/, то есть обычно .../tuist/Binaries.
+Если SIG не передан, берётся результат read.
+TXT
+  exit "${1:-0}"
+}
+
+# `|| true` обязателен: по несуществующему каталогу find возвращает 1, и под set -e
+# это рубит вызывающее присваивание ещё до того, как мы решим выпускать подпись.
+artifact_in() {
+  find "$1" -mindepth 2 -maxdepth 2 \
+    \( -name '*.xcframework' -o -name '*.framework' -o -name '*.macro' \) \
+    -print -quit 2>/dev/null || true
+}
+
+# Подпись выпускает только Tuist, запущенный на этой машине, и только вместе с каким-нибудь
+# артефактом кэша. Собираем для этого пустышку во временном каталоге: держать её в
+# репозитории незачем, а так она не устареет и ни на чьи хэши не повлияет. Таргет под macOS,
+# потому что рантайма симулятора iOS на машине может не быть, а от платформы и от содержимого
+# артефакта подпись не зависит. Занимает около трёх секунд.
+mint() {
+  local dir; dir="$(mktemp -d)"
+  mkdir -p "$dir/Sources/Mint"
+  cat > "$dir/Tuist.swift" <<'MANIFEST'
+import ProjectDescription
+let config = Config(project: .tuist(cacheOptions: .options(
+    profiles: .profiles(default: .allPossible), storages: [.local])))
+MANIFEST
+  cat > "$dir/Project.swift" <<'MANIFEST'
+import ProjectDescription
+let project = Project(name: "Mint", targets: [
+    .target(name: "Mint", destinations: [.mac], product: .framework,
+            bundleId: "dev.tuist.cachesignature.mint", deploymentTargets: .macOS("14.0"),
+            sources: ["Sources/Mint/**"]),
+])
+MANIFEST
+  echo 'public let mint = 1' > "$dir/Sources/Mint/Mint.swift"
+
+  local runner=""
+  command -v tuist >/dev/null 2>&1 || runner="mise exec --"
+
+  local value=""
+  if ( export XDG_CACHE_HOME="$dir/.cache"; cd "$dir" && $runner tuist cache warm ) >/dev/null 2>&1; then
+    local artifact; artifact="$(artifact_in "$dir/.cache/tuist/Binaries")"
+    [ -n "$artifact" ] && value="$(xattr -p "$XATTR_NAME" "$artifact" 2>/dev/null || true)"
+  fi
+  rm -rf "$dir"
+
+  [ -n "$value" ] || die "не удалось выпустить подпись: проверь, что tuist доступен и собирает под macOS"
+  printf '%s' "$value"
+}
+
+cmd_read() {
+  local artifact; artifact="$(artifact_in "$SYSTEM_CACHE")"
+  if [ -n "$artifact" ]; then
+    local value; value="$(xattr -p "$XATTR_NAME" "$artifact" 2>/dev/null || true)"
+    [ -n "$value" ] && { printf '%s' "$value"; return; }
+  fi
+  mint
+}
+
+cmd_stamp() {
+  local dir="${1:-}" sig="${2:-}"
+  [ -n "$dir" ] || usage 1
+  [ -d "$dir" ] || die "каталог $dir не существует"
+  [ -n "$sig" ] || sig="$(cmd_read)"
+  [ -n "$sig" ] || die "нечем штамповать: подпись пустая"
+
+  # Проверяется не всё, что подписывается: при чтении Tuist смотрит Metadata.plist и сам
+  # артефакт, каталог хэша не смотрит. Штампуем всё три — дёшево и совпадает с тем, что
+  # делает сам Tuist при записи.
+  local entry path stamped=0
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    for path in "$entry" "$entry/Metadata.plist" "$entry"/*.xcframework "$entry"/*.framework "$entry"/*.macro; do
+      [ -e "$path" ] && xattr -w "$XATTR_NAME" "$sig" "$path"
+    done
+    stamped=$((stamped + 1))
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+
+  [ "$stamped" -gt 0 ] || die "в $dir нет записей кэша"
+  echo "проштамповано записей: $stamped"
+}
+
+case "${1:-}" in
+  read)  shift; cmd_read; echo ;;
+  stamp) shift; cmd_stamp "$@" ;;
+  -h|--help|help|"") usage ;;
+  *) die "неизвестная команда: $1" ;;
+esac

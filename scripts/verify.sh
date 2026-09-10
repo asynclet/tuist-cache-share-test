@@ -50,15 +50,8 @@ else
   # Локальную подпись берём из уже прогретого кэша машины, а если его нет — греем
   # отдельный каталог рядом. Вывод прогрева не глушим: когда он падает, причину надо
   # видеть, иначе последний случай молча остаётся непроверенным.
-  echo "  (нужна подпись этой машины)"
-  local_art="$(find "$HOME/.cache/tuist/Binaries" -mindepth 2 -maxdepth 2 \
-      \( -name '*.xcframework' -o -name '*.framework' -o -name '*.macro' \) 2>/dev/null | head -1)"
-  if [ -n "$local_art" ]; then
-    sig_local="$(xattr -p "$XATTR_NAME" "$local_art" 2>/dev/null || true)"
-  else
-    echo "  системный кэш пуст, выпускаю подпись проектом-пустышкой (~3 с)"
-    sig_local="$(mint_signature)"
-  fi
+  echo "  (беру подпись этой машины через bin/tuist-cache-signature)"
+  sig_local="$("$ROOT/bin/tuist-cache-signature" read)" || true
 fi
 
 if [ -n "$sig_local" ]; then

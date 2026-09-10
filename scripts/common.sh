@@ -93,16 +93,9 @@ entry_paths() {
   done
 }
 
-stamp_all() {
-  local sig="$1" entry p
-  [ -n "$sig" ] || die "нечем штамповать: пустое значение подписи"
-  while IFS= read -r entry; do
-    [ -n "$entry" ] || continue
-    while IFS= read -r p; do
-      [ -n "$p" ] && xattr -w "$XATTR_NAME" "$sig" "$p"
-    done < <(entry_paths "$entry")
-  done < <(all_entries)
-}
+# Правила штамповки живут в bin/tuist-cache-signature — он же используется в боевом
+# потоке, поэтому проверка гоняет ровно то, что потом поедет на CI.
+stamp_all() { "$ROOT/bin/tuist-cache-signature" stamp "$BINARIES" "$1" >/dev/null; }
 
 strip_all() {
   local entry p
@@ -114,32 +107,3 @@ strip_all() {
   done < <(all_entries)
 }
 
-# Подпись машины можно получить только у Tuist, запущенного на ней, и только вместе с
-# каким-нибудь артефактом кэша. Поэтому собираем проект-пустышку во временном каталоге:
-# в репозитории держать его незачем, а так он не может ни устареть, ни попасть в workspace,
-# ни повлиять на хэши. Таргет под macOS — рантайм симулятора iOS может быть не установлен,
-# а подпись не зависит ни от платформы, ни от содержимого артефакта. Занимает ~3 секунды.
-mint_signature() {
-  local dir; dir="$(mktemp -d)"
-  mkdir -p "$dir/Sources/Mint"
-  cat > "$dir/Tuist.swift" <<'MANIFEST'
-import ProjectDescription
-let config = Config(project: .tuist(cacheOptions: .options(
-    profiles: .profiles(default: .allPossible), storages: [.local])))
-MANIFEST
-  cat > "$dir/Project.swift" <<'MANIFEST'
-import ProjectDescription
-let project = Project(name: "Mint", targets: [
-    .target(name: "Mint", destinations: [.mac], product: .framework,
-            bundleId: "io.cacheshare.mint", deploymentTargets: .macOS("14.0"),
-            sources: ["Sources/Mint/**"]),
-])
-MANIFEST
-  echo 'public let mint = 1' > "$dir/Sources/Mint/Mint.swift"
-  ( export XDG_CACHE_HOME="$dir/.cache"; cd "$dir" && command mise exec -- tuist cache warm ) >/dev/null 2>&1 \
-    || echo "  прогрев пустышки не отработал" >&2
-  local artifact
-  artifact="$(find "$dir/.cache/tuist/Binaries" -mindepth 2 -maxdepth 2 -name '*.xcframework' 2>/dev/null | head -1)"
-  [ -n "$artifact" ] && xattr -p "$XATTR_NAME" "$artifact" 2>/dev/null
-  rm -rf "$dir"
-}
