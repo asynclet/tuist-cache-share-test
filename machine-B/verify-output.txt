@@ -1,0 +1,86 @@
+➜  tuist-cache-share-test git:(main) bash scripts/verify.sh
+
+=== Окружение (должно совпадать на обеих машинах)
+  tuist      4.195.17
+  xcodebuild Xcode 26.5
+  swift      Apple Swift version 6.3.2 (swiftlang-6.3.2.1.108 clang-2100.1.1.101)
+  кэш        /Users/asynclet/tuist-cache-share-test/.cache
+
+=== 1. Совпадают ли хэши таргетов с машиной A
+  ДА, хэши идентичны — перенос кэша в принципе возможен
+
+=== 2. Подписи двух машин
+  подпись доехала в архиве целой (tar сохранил атрибут)
+
+=== 3. Прогоны
+  чужая подпись как есть (без штамповки) промах
+  метка снята со всех записей (контроль) промах
+  (нужна подпись этой машины)
+  системный кэш пуст, выпускаю подпись проектом signature-mint
+Loading and constructing the graph
+It might take a while if the cache is empty
+Hashing cacheable targets
+Targets to be cached: Mint
+Loading and constructing the graph
+It might take a while if the cache is empty
+Using cache binaries for the following targets:
+Generating workspace SignatureMint.xcworkspace
+Generating project SignatureMint
+Building cacheable targets
+Building scheme Binaries-Cache-macOS for device
+note: Using codesigning identity override:
+note: Building targets in dependency order
+note: Target dependency graph (1 target)
+[Mint] Write Auxiliary File module.modulemap
+[Mint] Write Auxiliary File Mint.SwiftConstValuesFileList
+[Mint] Write Auxiliary File Mint_const_extract_protocols.json
+[Mint] Write Auxiliary File 7187679823f38a2a940e0043cdf9d637-common-args.resp
+[Mint] Write Auxiliary File Mint.LinkFileList
+[Mint] Write Auxiliary File Mint-OutputFileMap.json
+[Mint] Write Auxiliary File Mint.SwiftFileList
+[Mint] Write Auxiliary File Mint_const_extract_protocols.json
+[Mint] Write Auxiliary File Mint.SwiftFileList
+[Mint] Write Auxiliary File Mint.SwiftConstValuesFileList
+[Mint] Write Auxiliary File Mint.LinkFileList
+[Mint] Write Auxiliary File Mint-OutputFileMap.json
+[Mint] Write Auxiliary File 7187679823f38a2a940e0043cdf9d637-common-args.resp
+[Mint] Write Auxiliary File Mint.hmap
+[Mint] Write Auxiliary File Mint.DependencyStaticMetadataFileList
+[Mint] Write Auxiliary File Mint.DependencyMetadataFileList
+[Mint] Write Auxiliary File Mint-project-headers.hmap
+[Mint] Write Auxiliary File Mint-own-target-headers.hmap
+[Mint] Write Auxiliary File Mint-generated-files.hmap
+[Mint] Write Auxiliary File Mint-all-target-headers.hmap
+[Mint] Write Auxiliary File Mint-all-non-framework-target-headers.hmap
+[Mint] Write Auxiliary File Mint_vers.c
+[Mint] Copy module.modulemap -> module.modulemap                                                                                                              [Mint] Processing Mint-Info.plist                                                                                                                             [Mint] Compiling Mint.swift                                                                                                                                   [Mint] Compiling Mint.swift                                                                                                                                   [Mint] Compiling Mint.swift                                                                                                                                   [Mint] Compiling Mint.swift
+[Mint] Copy arm64-apple-macos.abi.json -> Mint.abi.json
+[Mint] Copy arm64-apple-macos.swiftdoc -> Mint.swiftdoc
+[Mint] Copy arm64-apple-macos.swiftmodule -> Mint.swiftmodule
+[Mint] Copy arm64-apple-macos.swiftsourceinfo -> Mint.swiftsourceinfo
+[Mint] Copy x86_64-apple-macos.swiftmodule -> Mint.swiftmodule
+[Mint] Copy x86_64-apple-macos.swiftdoc -> Mint.swiftdoc
+[Mint] Copy x86_64-apple-macos.abi.json -> Mint.abi.json
+[Mint] Copy x86_64-apple-macos.swiftsourceinfo -> Mint.swiftsourceinfo
+[Mint] Compiling Mint_vers.c
+[Mint] Compiling Mint_vers.c
+[Mint] Linking Mint
+[Mint] Linking Mint
+[Mint] Create Universal Binary Mint
+[Mint] Extract App Intents Metadata
+[Mint] RegisterExecutionPolicyException Mint.framework
+[Mint] Touching Mint.framework
+Build Succeeded
+Creating XCFrameworks
+Creating XCFramework for Mint
+Storing binaries to speed up workflows
+1 target stored: Mint
+All cacheable targets have been cached successfully as xcframeworks
+  штамп локальной подписью ПОПАДАНИЕ: Feature, Core
+  примечание: локальная подпись отличается от подписи машины A
+
+Как читать результат:
+  хэши разошлись                  → чинить машинно-зависимые значения в настройках, остальное бессмысленно
+  чужая подпись дала попадание    → штамповка не нужна, переносить можно как есть
+  чужая дала промах, штамп попал  → штамповка обязательна, рецепт рабочий
+  штамп тоже промах               → в проверке участвует что-то ещё, писать в задачу
