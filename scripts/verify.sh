@@ -47,13 +47,20 @@ sig_local=""
 if [ -n "${SIGNATURE_LOCAL:-}" ]; then
   sig_local="$SIGNATURE_LOCAL"
 else
-  echo "  (для последнего случая нужна локальная подпись: прогреваю свой кэш в стороне)"
-  warm_dir="$(mktemp -d)"
-  ( XDG_CACHE_HOME_OVERRIDE="$warm_dir" bash -c "source '$ROOT/scripts/common.sh'; cd '$ROOT'; tuist cache warm >/dev/null 2>&1" ) || true
-  local_art="$(find "$warm_dir/tuist/Binaries" -mindepth 2 -maxdepth 2 \
+  # Локальную подпись берём из уже прогретого кэша машины, а если его нет — греем
+  # отдельный каталог рядом. Вывод прогрева не глушим: когда он падает, причину надо
+  # видеть, иначе последний случай молча остаётся непроверенным.
+  echo "  (нужна подпись этой машины)"
+  local_art="$(find "$HOME/.cache/tuist/Binaries" -mindepth 2 -maxdepth 2 \
       \( -name '*.xcframework' -o -name '*.framework' -o -name '*.macro' \) 2>/dev/null | head -1)"
+  if [ -z "$local_art" ]; then
+    echo "  системный кэш пуст, грею отдельный каталог .warm"
+    ( export XDG_CACHE_HOME="$ROOT/.warm"; cd "$ROOT" && command mise exec -- tuist cache warm ) \
+      || echo "  прогрев не отработал, см. вывод выше"
+    local_art="$(find "$ROOT/.warm/tuist/Binaries" -mindepth 2 -maxdepth 2 \
+        \( -name '*.xcframework' -o -name '*.framework' -o -name '*.macro' \) 2>/dev/null | head -1)"
+  fi
   [ -n "$local_art" ] && sig_local="$(xattr -p "$XATTR_NAME" "$local_art" 2>/dev/null || true)"
-  rm -rf "$warm_dir"
 fi
 
 if [ -n "$sig_local" ]; then
@@ -65,7 +72,10 @@ if [ -n "$sig_local" ]; then
     echo "  примечание: локальная подпись отличается от подписи машины A"
   fi
 else
-  echo "  не удалось получить локальную подпись — задай её через SIGNATURE_LOCAL"
+  echo "  не удалось получить локальную подпись. Возьми её вручную и перезапусти:"
+  echo "    XDG_CACHE_HOME=\"\$PWD/.warm\" mise exec -- tuist cache warm"
+  echo "    SIG=\$(xattr -p tuist.cloud.metadata \"\$(find \"\$PWD/.warm/tuist/Binaries\" -mindepth 2 -maxdepth 2 -name '*.xcframework' | head -1)\")"
+  echo "    SIGNATURE_LOCAL=\"\$SIG\" bash scripts/verify.sh"
 fi
 
 cat <<'TXT'
