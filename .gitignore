@@ -66,6 +66,4 @@ fastlane/test_output
 Derived/
 *.xcodeproj/
 *.xcworkspace/
-cache-*.tgz
-hashes-*.txt
-signature-*.txt
+hashes-B.txt
