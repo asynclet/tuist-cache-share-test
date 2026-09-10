@@ -1,0 +1,78 @@
+#!/bin/bash
+# Машина B: сверить хэши с машиной A и прогнать случаи подряд.
+source "$(dirname "$0")/common.sh"
+need_tuist
+cd "$ROOT"
+
+for f in cache-A.tgz hashes-A.txt signature-A.txt; do
+  [ -f "$f" ] || die "нет файла $f — скопируй его с машины A"
+done
+
+print_env
+
+head2 "1. Совпадают ли хэши таргетов с машиной A"
+hash_table > hashes-B.txt
+if diff -q hashes-A.txt hashes-B.txt >/dev/null; then
+  echo "  ДА, хэши идентичны — перенос кэша в принципе возможен"
+else
+  echo "  НЕТ, хэши расходятся. Дальше попаданий не будет ни при какой подписи."
+  printf '  строк всего: A=%s B=%s, различается: %s\n' \
+    "$(wc -l < hashes-A.txt | tr -d ' ')" "$(wc -l < hashes-B.txt | tr -d ' ')" \
+    "$(diff hashes-A.txt hashes-B.txt | grep -c '^[<>]')"
+  echo "  первые расхождения:"
+  diff hashes-A.txt hashes-B.txt | grep '^[<>]' | head -6 | sed 's/^/    /'
+fi
+
+head2 "2. Подписи двух машин"
+rm -rf "$BINARIES"
+mkdir -p "$XDG_CACHE_HOME/tuist"
+tar -xzf cache-A.tgz -C "$XDG_CACHE_HOME/tuist"
+art="$(any_local_artifact)"
+[ -n "$art" ] || die "в распакованном архиве нет артефактов"
+sig_a="$(cat signature-A.txt)"
+sig_transferred="$(signature_of "$art")"
+if [ "$sig_transferred" = "$sig_a" ]; then
+  echo "  подпись доехала в архиве целой (tar сохранил атрибут)"
+else
+  echo "  подпись в архиве НЕ сохранилась — случай ниже проверит отсутствие метки"
+fi
+
+head2 "3. Прогоны"
+report "чужая подпись как есть (без штамповки)"
+
+strip_all
+report "метка снята со всех записей (контроль)"
+
+sig_local=""
+if [ -n "${SIGNATURE_LOCAL:-}" ]; then
+  sig_local="$SIGNATURE_LOCAL"
+else
+  echo "  (для последнего случая нужна локальная подпись: прогреваю свой кэш в стороне)"
+  warm_dir="$(mktemp -d)"
+  ( XDG_CACHE_HOME_OVERRIDE="$warm_dir" bash -c "source '$ROOT/scripts/common.sh'; cd '$ROOT'; tuist cache warm >/dev/null 2>&1" ) || true
+  local_art="$(find "$warm_dir/tuist/Binaries" -mindepth 2 -maxdepth 2 \
+      \( -name '*.xcframework' -o -name '*.framework' -o -name '*.macro' \) 2>/dev/null | head -1)"
+  [ -n "$local_art" ] && sig_local="$(xattr -p "$XATTR_NAME" "$local_art" 2>/dev/null || true)"
+  rm -rf "$warm_dir"
+fi
+
+if [ -n "$sig_local" ]; then
+  stamp_all "$sig_local"
+  report "штамп локальной подписью"
+  if [ "$sig_local" = "$sig_a" ]; then
+    echo "  примечание: локальная подпись совпала с подписью машины A"
+  else
+    echo "  примечание: локальная подпись отличается от подписи машины A"
+  fi
+else
+  echo "  не удалось получить локальную подпись — задай её через SIGNATURE_LOCAL"
+fi
+
+cat <<'TXT'
+
+Как читать результат:
+  хэши разошлись                  → чинить машинно-зависимые значения в настройках, остальное бессмысленно
+  чужая подпись дала попадание    → штамповка не нужна, переносить можно как есть
+  чужая дала промах, штамп попал  → штамповка обязательна, рецепт рабочий
+  штамп тоже промах               → в проверке участвует что-то ещё, писать в задачу
+TXT
