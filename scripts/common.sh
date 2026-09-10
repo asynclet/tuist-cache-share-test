@@ -11,18 +11,36 @@ FIXTURES="$ROOT/machine-A"
 die() { printf '\n%s\n' "ОШИБКА: $*" >&2; exit 1; }
 head2() { printf '\n=== %s\n' "$*"; }
 
+# Tuist берём через mise, а не из PATH: версия пинится в mise.toml, поэтому на обеих
+# машинах она заведомо одна. Функция перекрывает имя команды, внутри вызывается уже
+# бинарник, так что рекурсии нет. Запуск из корня проекта — mise ищет там свой конфиг,
+# да и сам tuist должен работать в каталоге проекта.
+tuist() { ( cd "$ROOT" && command mise exec -- tuist "$@" ); }
+
 need_tuist() {
-  command -v tuist >/dev/null 2>&1 || die "tuist не найден в PATH"
+  command -v mise >/dev/null 2>&1 || die "mise не найден, поставь его: https://mise.jdx.dev"
+  # Свежий клон mise не доверяет и конфиг не читает. Файл здесь свой, из этого же
+  # репозитория, и содержит одну строку с версией, поэтому доверяем ему явно.
+  if ! ( cd "$ROOT" && command mise config ls >/dev/null 2>&1 ); then
+    echo "Доверяю mise.toml этого репозитория (mise trust)"
+    command mise trust "$ROOT/mise.toml" >/dev/null || die "mise trust не отработал"
+  fi
+  if ! ( cd "$ROOT" && command mise which tuist >/dev/null 2>&1 ); then
+    echo "Ставлю tuist версии из mise.toml…"
+    ( cd "$ROOT" && command mise install ) || die "mise install не отработал"
+  fi
 }
 
 # В хэши кэша входят версии Swift и Tuist, поэтому расхождение окружения даёт
 # ложный промах. Печатаем всё, что влияет, чтобы сверить машины глазами.
 print_env() {
   head2 "Окружение (должно совпадать на обеих машинах)"
-  printf '  tuist    %s\n' "$(tuist version 2>/dev/null || echo '?')"
-  printf '  xcodebuild %s\n' "$(xcodebuild -version 2>/dev/null | head -1 || echo '?')"
-  printf '  swift    %s\n' "$(xcrun swift --version 2>/dev/null | head -1 || echo '?')"
-  printf '  кэш      %s\n' "$XDG_CACHE_HOME"
+  # sed вместо head: head закрывает пайп после первой строки, источник падает по
+  # SIGPIPE, и ветка с вопросительным знаком срабатывает поверх нормального вывода.
+  printf '  tuist      %s\n' "$(tuist version 2>/dev/null | sed -n 1p)"
+  printf '  xcodebuild %s\n' "$(xcodebuild -version 2>/dev/null | sed -n 1p)"
+  printf '  swift      %s\n' "$(xcrun swift --version 2>/dev/null | sed -n 1p)"
+  printf '  кэш        %s\n' "$XDG_CACHE_HOME"
 }
 
 # Единственный надёжный признак попадания — непустой список имён после "targets:".
