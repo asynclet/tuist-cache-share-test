@@ -60,3 +60,12 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Артефакты этого набора
+.cache/
+Derived/
+*.xcodeproj/
+*.xcworkspace/
+cache-*.tgz
+hashes-*.txt
+signature-*.txt
