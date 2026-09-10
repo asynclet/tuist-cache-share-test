@@ -53,17 +53,12 @@ else
   echo "  (нужна подпись этой машины)"
   local_art="$(find "$HOME/.cache/tuist/Binaries" -mindepth 2 -maxdepth 2 \
       \( -name '*.xcframework' -o -name '*.framework' -o -name '*.macro' \) 2>/dev/null | head -1)"
-  if [ -z "$local_art" ]; then
-    # Греем не основной проект, а signature-mint: он под macOS, поэтому не требует
-    # установленного рантайма симулятора iOS, которого на машине может не быть.
-    echo "  системный кэш пуст, выпускаю подпись проектом signature-mint"
-    ( export XDG_CACHE_HOME="$ROOT/signature-mint/.warm"
-      cd "$ROOT/signature-mint" && command mise exec -- tuist cache warm ) \
-      || echo "  прогрев не отработал, см. вывод выше"
-    local_art="$(find "$ROOT/signature-mint/.warm/tuist/Binaries" -mindepth 2 -maxdepth 2 \
-        \( -name '*.xcframework' -o -name '*.framework' -o -name '*.macro' \) 2>/dev/null | head -1)"
+  if [ -n "$local_art" ]; then
+    sig_local="$(xattr -p "$XATTR_NAME" "$local_art" 2>/dev/null || true)"
+  else
+    echo "  системный кэш пуст, выпускаю подпись проектом-пустышкой (~3 с)"
+    sig_local="$(mint_signature)"
   fi
-  [ -n "$local_art" ] && sig_local="$(xattr -p "$XATTR_NAME" "$local_art" 2>/dev/null || true)"
 fi
 
 if [ -n "$sig_local" ]; then
@@ -76,9 +71,7 @@ if [ -n "$sig_local" ]; then
   fi
 else
   echo "  не удалось получить локальную подпись. Возьми её вручную и перезапусти:"
-  echo "    cd signature-mint && XDG_CACHE_HOME=\"\$PWD/.warm\" mise exec -- tuist cache warm && cd .."
-  echo "    SIG=\$(xattr -p tuist.cloud.metadata \"\$(find signature-mint/.warm/tuist/Binaries -mindepth 2 -maxdepth 2 -name '*.xcframework' | head -1)\")"
-  echo "    SIGNATURE_LOCAL=\"\$SIG\" bash scripts/verify.sh"
+  echo "    SIGNATURE_LOCAL=\"<значение>\" bash scripts/verify.sh"
 fi
 
 cat <<'TXT'
