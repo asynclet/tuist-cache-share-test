@@ -64,6 +64,7 @@ fastlane/test_output
 # Артефакты этого набора
 .cache/
 .warm/
+transfer/
 Derived/
 *.xcodeproj/
 *.xcworkspace/

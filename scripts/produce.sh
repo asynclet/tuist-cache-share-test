@@ -27,6 +27,6 @@ printf '  cache-A.tgz: %s\n' "$(du -h "$FIXTURES/cache-A.tgz" | cut -f1)"
 
 cat <<TXT
 
-Готово, всё сложено в machine-A/. Закоммить этот каталог, и на машине B хватит
-клона репозитория плюс bash scripts/verify.sh
+Готово, всё сложено в transfer/. Скопируй каталог на машину B в корень того же
+репозитория и запусти там bash scripts/verify.sh
 TXT

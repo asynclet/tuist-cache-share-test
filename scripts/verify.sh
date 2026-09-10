@@ -5,7 +5,7 @@ need_tuist
 cd "$ROOT"
 
 for f in cache-A.tgz hashes-A.txt signature-A.txt; do
-  [ -f "$FIXTURES/$f" ] || die "нет файла machine-A/$f — он должен лежать в репозитории"
+  [ -f "$FIXTURES/$f" ] || die "нет файла transfer/$f — скопируй каталог transfer/ с машины A"
 done
 
 print_env

@@ -5,8 +5,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME_OVERRIDE:-$ROOT/.cache}"
 BINARIES="$XDG_CACHE_HOME/tuist/Binaries"
 XATTR_NAME="tuist.cloud.metadata"
-# Набор с машины A лежит в репозитории, чтобы на машине B хватило клона и verify.sh.
-FIXTURES="$ROOT/machine-A"
+# Что машина A передаёт машине B. В репозиторий не коммитится: архив кэша и подпись —
+# артефакты конкретного прогона, а не часть набора.
+FIXTURES="$ROOT/transfer"
 
 die() { printf '\n%s\n' "ОШИБКА: $*" >&2; exit 1; }
 head2() { printf '\n=== %s\n' "$*"; }
